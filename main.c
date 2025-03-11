@@ -219,7 +219,60 @@ static void udp_task(void *pvParameters)
     }
     vTaskDelete(NULL);
 }
+static const char * if_str[] = {"STA", "AP", "ETH", "MAX"};
+static const char * ip_protocol_str[] = {"V4", "V6", "MAX"};
 
+void mdns_print_results(mdns_result_t * results){
+    mdns_result_t * r = results;
+    mdns_ip_addr_t * a = NULL;
+    int i = 1, t;
+    while(r){
+        printf("%d:, Type: %s\n", i++, ip_protocol_str[r->ip_protocol]);
+        if(r->instance_name){
+            printf("  PTR : %s\n", r->instance_name);
+        }
+        if(r->hostname){
+            printf("  SRV : %s.local:%u\n", r->hostname, r->port);
+        }
+        if(r->txt_count){
+            printf("  TXT : [%u] ", r->txt_count);
+            for(t=0; t<r->txt_count; t++){
+                printf("%s=%s; ", r->txt[t].key, r->txt[t].value);
+            }
+            printf("\n");
+        }
+        a = r->addr;
+        while(a){
+            if(a->addr.type == IPADDR_TYPE_V6){
+                printf("  AAAA: " IPV6STR "\n", IPV62STR(a->addr.u_addr.ip6));
+            } else {
+                printf("  A   : " IPSTR "\n", IP2STR(&(a->addr.u_addr.ip4)));
+            }
+            a = a->next;
+        }
+        r = r->next;
+    }
+
+}
+
+void find_mdns_service(const char * service_name, const char * proto)
+{
+    ESP_LOGI(TAG, "Query PTR: %s.%s.local", service_name, proto);
+
+    mdns_result_t * results = NULL;
+    esp_err_t err = mdns_query_ptr(service_name, proto, 3000, 20,  &results);
+    if(err){
+        ESP_LOGE(TAG, "Query Failed");
+        return;
+    }
+    if(!results){
+        ESP_LOGW(TAG, "No results found!");
+        return;
+    }
+
+    mdns_print_results(results);
+    mdns_query_results_free(results);
+}
 void app_main(void)
 {
     //Initialize NVS
@@ -239,6 +292,15 @@ void app_main(void)
     printf("Aici\n");
     mdns_hostname_set("esp32-Chiran");
     resolve_mdns_host("esp32-Chiriac");
+    find_mdns_service("_http", "_tcp");
+    //or file servers
+    find_mdns_service("_smb", "_tcp"); //windows sharing
+    find_mdns_service("_afpovertcp", "_tcp"); //apple sharing
+    find_mdns_service("_nfs", "_tcp"); //NFS server
+    find_mdns_service("_ftp", "_tcp"); //FTP server
+    //or networked printer
+    find_mdns_service("_printer", "_tcp");
+    find_mdns_service("_ipp", "_tcp");
     if (connected) {
         xTaskCreate(udp_task, "udp_task", 4096, NULL, 5, NULL);
     }
