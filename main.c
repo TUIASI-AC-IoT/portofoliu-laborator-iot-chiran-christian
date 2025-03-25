@@ -1,92 +1,73 @@
-#include <stdio.h>
+/*  WiFi softAP Example
+
+   This example code is in the Public Domain (or CC0 licensed, at your option.)
+
+   Unless required by applicable law or agreed to in writing, this
+   software is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
+   CONDITIONS OF ANY KIND, either express or implied.
+*/
+#include <string.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "driver/gpio.h"
-#define GPIO_OUTPUT_IO 4
-#define GPIO_OUTPUT_PIN_SEL (1ULL<<GPIO_OUTPUT_IO)
-#define GPIO_BUTTON_IO 2
-#define GPIO_BUTTON_PIN_SEL (1ULL<<GPIO_BUTTON_IO)
-void vTask(void * pvParameters)
+#include "esp_system.h"
+#include "esp_wifi.h"
+#include "esp_event.h"
+#include "esp_log.h"
+#include "nvs_flash.h"
+#include "freertos/event_groups.h"
+#include "esp_http_server.h"
+#include "nvs_flash.h"
+#include "nvs.h"
+
+#include "lwip/err.h"
+#include "lwip/sys.h"
+
+#include "D:\scs_2A\lab5\Lab5\soft-ap.h"
+#include "D:\scs_2A\lab5\Lab5\soft-ap.c"
+#include "D:\scs_2A\lab5\Lab5\http-server.h"
+#include "D:\scs_2A\lab5\Lab5\http-server.c"
+#include "../mdns/include/mdns.h"
+
+
+void app_main(void)
 {
-    gpio_config_t io_conf = {};
-    io_conf.intr_type = GPIO_INTR_DISABLE;
-    //set as output mode
-    io_conf.mode = GPIO_MODE_INPUT;
-    //bit mask of the pins that you want to set
-    io_conf.pin_bit_mask = GPIO_BUTTON_PIN_SEL;
-    //disable pull-down mode
-    io_conf.pull_down_en = 0;
-    //disable pull-up mode
-    io_conf.pull_up_en = 0;
-    //configure GPIO with the given settings
-    gpio_config(&io_conf);
-
-    static int button_count = 0;
-    int last_button = 1;
-    while (1) {
-        int current_button = gpio_get_level(GPIO_BUTTON_IO);
-        if (last_button ==1 && current_button ==0)
-        {
-            button_count++;
-            printf("Buton apasat %d\n", button_count);
-        }
-        last_button = current_button;
-        vTaskDelay(1000 / portTICK_PERIOD_MS);
+    //Initialize NVS
+    esp_err_t ret = nvs_flash_init();
+    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+      ESP_ERROR_CHECK(nvs_flash_erase());
+      ret = nvs_flash_init();
     }
-}
-
-void app_main() {
-    //zero-initialize the config structure.
-    gpio_config_t io_conf = {};
-    //disable interrupt
-    io_conf.intr_type = GPIO_INTR_DISABLE;
-    //set as output mode
-    io_conf.mode = GPIO_MODE_OUTPUT;
-    //bit mask of the pins that you want to set
-    io_conf.pin_bit_mask = GPIO_OUTPUT_PIN_SEL;
-    //disable pull-down mode
-    io_conf.pull_down_en = 0;
-    //disable pull-up mode
-    io_conf.pull_up_en = 0;
-    //configure GPIO with the given settings
-    gpio_config(&io_conf);
-    
-    int cnt = 0;
-    while(1) {
-        printf("cnt: %d\n", cnt++);
-        if(cnt % 4 == 0)
-        {
-            gpio_set_level(GPIO_OUTPUT_IO, 1);
-            vTaskDelay(750 / portTICK_PERIOD_MS);
-        }
-        if(cnt % 4 == 1)
-        {
-            gpio_set_level(GPIO_OUTPUT_IO, 0);
-            vTaskDelay(1000 / portTICK_PERIOD_MS);
-        }
-        if(cnt % 4 == 2)
-        {
-            gpio_set_level(GPIO_OUTPUT_IO, 1);
-            vTaskDelay(500 / portTICK_PERIOD_MS);
-        }
-        if(cnt % 4 == 3)
-        {
-            gpio_set_level(GPIO_OUTPUT_IO, 0);
-            vTaskDelay(250 / portTICK_PERIOD_MS);
-        }
+    ESP_ERROR_CHECK(ret);
+  wifi_ap_record_t ap_record[10];
+  uint16_t n=10;
+    esp_netif_init();
+    esp_event_loop_create_default();
+    esp_netif_t *wifi_netif = esp_netif_create_default_wifi_sta();
+    wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
+    esp_wifi_init(&cfg);
+    esp_wifi_set_mode(WIFI_MODE_STA);
+    esp_wifi_start();
+    esp_wifi_scan_start(NULL,true);
+    esp_wifi_scan_get_ap_records(&n, ap_record);
+    // esp_wifi_stop();
+    // esp_wifi_deinit();
+    // esp_wifi_clear_default_wifi_driver_and_handlers(wifi_netif);
+    // esp_netif_destroy(wifi_netif);
+    for (int i = 0; i < n; i++) {
+      ESP_LOGI(TAG, "SSID \t\t%s", ap_record[i].ssid);
     }
+    // TODO: 3. Pornire mod STA + scanare SSID-uri disponibile
+
+    // TODO: 4. Initializare mDNS (daca mai ramana timp)    
+
+    // TODO: 1. Pornire softAP 
+    ESP_LOGI(TAG, "ESP_WIFI_MODE_AP");
+    wifi_init_softap();
+
+
+    // TODO: 2. Pornire server web (si config specifice in http-server.c) 
+
+    httpd_handle_t server;
+    server = start_webserver();
+    if(server) {}
 }
-
-/* 
-    Ce rol are functia gpio config?
-gpio_config are rol de a configura GPIO4 ca si port de iesire. 
-
-    In codul exemplu, pinul GPIO4 este configurat ca iesire. Care sunt celelalte
-moduri ın care poate fi configurat un pin GPIO?
-GPIO4 poate fi configurat ca si pull-up/pull-down, iesire/intrare, pin mapping
-
-
-    Explicati apelul vTaskDelay.
-apelul functii vTaskDelay este pentru a creea o pauza pentru a observa cand ledul este activ si inactiv. 
-    De ce functia principala se numeste app main?
-*/
